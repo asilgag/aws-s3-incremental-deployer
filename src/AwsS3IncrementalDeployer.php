@@ -12,8 +12,7 @@ use RuntimeException;
  */
 class AwsS3IncrementalDeployer {
   protected const CHECKSUMS_DIR = '.metadata';
-  public const CHECKSUMS_FILENAME = 'checksums.txt';
-
+  public const CHECKSUMS_FILENAME = 'checksums.dat';
 
   /**
    * A logger implementing PSR-3 logger interface.
@@ -248,7 +247,7 @@ class AwsS3IncrementalDeployer {
    *   The relative file path for checksum file
    */
   protected function getChecksumRelativeFilePath():string {
-    return self::CHECKSUMS_DIR . '/' . str_replace('.txt',md5($this->siteDir) . '.txt',self::CHECKSUMS_FILENAME);
+    return self::CHECKSUMS_DIR . '/' . str_replace('.dat','.' . md5($this->siteDir) . '.dat',self::CHECKSUMS_FILENAME);
   }
 
   /**

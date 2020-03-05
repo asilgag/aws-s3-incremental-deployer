@@ -248,7 +248,7 @@ class AwsS3IncrementalDeployer {
    *   The relative file path for checksum file
    */
   protected function getChecksumRelativeFilePath():string {
-    return self::CHECKSUMS_DIR . '/' . self::CHECKSUMS_FILENAME;
+    return self::CHECKSUMS_DIR . '/' . str_replace('.txt',md5($this->siteDir) . '.txt',self::CHECKSUMS_FILENAME);
   }
 
   /**
@@ -284,14 +284,18 @@ class AwsS3IncrementalDeployer {
    * @throws \RuntimeException
    */
   protected function createLocalSiteChecksums(): bool {
-    $siteDir = $this->siteDir;
-    $localChecksumsFilepath = $siteDir . '/' . $this->getChecksumRelativeFilePath();
+    $localChecksumsFilepath = $this->siteDir . '/' . $this->getChecksumRelativeFilePath();
     $this->logger->debug("Creating checksums on $localChecksumsFilepath");
+
+    // Ensure that directory for local checksums is present.
+    if (!is_dir($this->siteDir . '/' . self::CHECKSUMS_DIR)) {
+      mkdir($this->siteDir . '/' . self::CHECKSUMS_DIR, 0777, TRUE);
+    }
 
     // Execute a shell command to be able to scale to sites with millions of
     // files.
     $commands = [
-      "cd $siteDir",
+      'cd ' . $this->siteDir,
       'find . -type f ! -path "./' . self::CHECKSUMS_DIR . '/*" -print0 | sort -z | xargs -0 sha1sum > ' . $localChecksumsFilepath,
     ];
     $command = implode(' && ', $commands);
@@ -303,7 +307,7 @@ class AwsS3IncrementalDeployer {
     $this->logger->debug('Checksums generation took ' . number_format(round($timeEnd - $timeStart, 3), 3) . ' secs.');
 
     if ($returnValue !== 0) {
-      throw new RuntimeException("Unable to create checksums for $siteDir :\n" . implode("\n", $output));
+      throw new RuntimeException('Unable to create checksums for ' . $this->siteDir . " :\n" . implode("\n", $output));
     }
     $this->logger->debug('Checksums file created: ' . $localChecksumsFilepath);
 
@@ -319,13 +323,12 @@ class AwsS3IncrementalDeployer {
    * @throws \RuntimeException
    */
   protected function getLocalSiteChecksums(): array {
-    $localSiteDir = $this->siteDir;
-    $localChecksumsFilepath = $localSiteDir . '/' . $this->getChecksumRelativeFilePath();
+    $localChecksumsFilepath = $this->siteDir . '/' . $this->getChecksumRelativeFilePath();
     $this->logger->debug("Getting checksums from $localChecksumsFilepath");
     $localReleaseChecksumsRaw = @file_get_contents($localChecksumsFilepath);
     $localReleaseChecksums = $this->parseChecksumData($localReleaseChecksumsRaw);
     if (count($localReleaseChecksums) === 0) {
-      throw new RuntimeException("Local site $localSiteDir IS EMPTY");
+      throw new RuntimeException('Local site ' . $this->siteDir . ' IS EMPTY');
     }
     return $localReleaseChecksums;
   }

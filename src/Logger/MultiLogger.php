@@ -1,6 +1,6 @@
 <?php
 
-namespace Asilgag\Aws\S3\Logger;
+namespace Asilgag\AWS\S3\Logger;
 
 use DateTime;
 use Psr\Log\AbstractLogger;

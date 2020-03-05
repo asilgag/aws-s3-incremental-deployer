@@ -15,7 +15,8 @@
   "require": {
     "php": ">=7.1.0",
     "asilgag/aws-cli-wrapper": "^1.0",
-    "psr/log": "^1.1"
+    "psr/log": "^1.1",
+    "ext-json": "*"
   },
   "autoload": {
     "psr-4": {

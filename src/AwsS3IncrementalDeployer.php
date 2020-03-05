@@ -12,7 +12,7 @@ use RuntimeException;
  */
 class AwsS3IncrementalDeployer {
   protected const CHECKSUMS_DIR = '.metadata';
-  public const CHECKSUMS_FILENAME = 'checksums.dat';
+  public const CHECKSUMS_FILENAME = 'checksums';
 
   /**
    * A logger implementing PSR-3 logger interface.
@@ -55,6 +55,16 @@ class AwsS3IncrementalDeployer {
    * @var string
    */
   protected $bucketRootUri;
+
+  /**
+   * Bucket owner's id.
+   *
+   * It's used to generate a secret key for the checksum file, so save it from
+   * prying eyes.
+   *
+   * @var string
+   */
+  protected $bucketOwner;
 
   /**
    * S3SiteDeployer constructor.
@@ -245,9 +255,11 @@ class AwsS3IncrementalDeployer {
    *
    * @return string
    *   The relative file path for checksum file
+   *
+   * @throws \RuntimeException
    */
   protected function getChecksumRelativeFilePath():string {
-    return self::CHECKSUMS_DIR . '/' . str_replace('.dat','.' . md5($this->siteDir) . '.dat',self::CHECKSUMS_FILENAME);
+    return self::CHECKSUMS_DIR . '/' . self::CHECKSUMS_FILENAME . '.' . md5($this->getS3BucketOwner()) . '.dat';
   }
 
   /**
@@ -337,6 +349,8 @@ class AwsS3IncrementalDeployer {
    *
    * @return array
    *   An array with checksums or empty array if nothing found.
+   *
+   * @throws \RuntimeException
    */
   protected function getDeployedSiteChecksums(): array {
     $this->logger->debug('Getting last deployed release checksums...');
@@ -358,6 +372,8 @@ class AwsS3IncrementalDeployer {
    *   Key inside a bucket.
    * @param string $acl
    *   ACL name.
+   *
+   * @throws \RuntimeException
    */
   protected function s3PutObjectAcl(string $key, string $acl): void {
     $command = new CliCommand(
@@ -388,7 +404,7 @@ class AwsS3IncrementalDeployer {
       $this->s3cp($s3Uri, $tempFile);
     }
     catch (RuntimeException $e) {
-      $this->logger->warning('Error getting:' . $s3Uri . ': ' . $e->getMessage());
+      $this->logger->warning('Error getting: ' . $s3Uri . ': ' . $e->getMessage());
     }
 
     if (is_file($tempFile)) {
@@ -397,6 +413,31 @@ class AwsS3IncrementalDeployer {
     }
 
     return $objectContents;
+  }
+
+  /**
+   * Get bucket owner's id.
+   *
+   * It's used to generate a secret key for the checksum file, to save it from
+   * prying eyes. User running this program must have the "READ_ACP" permission
+   * granted.
+   *
+   * @return string
+   *   Bucket owner's id
+   *
+   * @throws \RuntimeException
+   */
+  protected function getS3BucketOwner(): string {
+    if (!$this->bucketOwner) {
+      $command = new CliCommand('s3api get-bucket-acl', ['--bucket ' . $this->bucket]);
+      $this->awsCli->exec($command, $output);
+      $acl = json_decode(implode("\n", $output), TRUE);
+      if (empty($acl['Owner']['ID'])) {
+        throw new RuntimeException('Unable to get the ID of the bucket owner. Make sure you have the "READ_ACP" permission granted.');
+      }
+      $this->bucketOwner = $acl['Owner']['ID'];
+    }
+    return $this->bucketOwner;
   }
 
   /**

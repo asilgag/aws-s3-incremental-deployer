@@ -1,0 +1,25 @@
+{
+  "name": "asilgag/aws-s3-incremental-deployer",
+  "type": "library",
+  "description": "Incremental and atomic deployments for AWS S3",
+  "keywords": ["AWS" ,"S3", "CLI"],
+  "homepage": "https://github.com/asilgag/aws-s3-incremental-deployer",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Alberto Silva",
+      "email": "asilgag@gmail.com",
+      "homepage": "https://github.com/asilgag"
+    }
+  ],
+  "require": {
+    "php": ">=7.1.0",
+    "asilgag/aws-cli-wrapper": "^1.0",
+    "psr/log": "^1.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "Asilgag\\AWS\\S3\\": "src/"
+    }
+  }
+}

@@ -66,7 +66,7 @@ class AwsS3IncrementalDeployer {
   /**
    * Bucket owner's id.
    *
-   * It's used to generate a secret key for the checksum file, so save it from
+   * It's used to generate a secret key for the checksum file, to save it from
    * prying eyes.
    *
    * @var string
@@ -78,7 +78,7 @@ class AwsS3IncrementalDeployer {
    *
    * @param \Psr\Log\LoggerInterface $logger
    *   A logger implementing PSR-3 logger interface.
-   * @see https://github.com/php-fig/fig-standards/blob/master/accepted/PSR-3-logger-interface.md   *
+   * @see https://github.com/php-fig/fig-standards/blob/master/accepted/PSR-3-logger-interface.md
    */
   public function __construct(LoggerInterface $logger) {
     $this->logger = $logger;
@@ -104,7 +104,12 @@ class AwsS3IncrementalDeployer {
    *   INCORRECT: ['/path/to/exclude/*'].
    */
   public function setExcludedPaths(array $excludedPaths): void {
-    $this->excludedPaths = $excludedPaths;
+    $filteredExcludedPaths = [];
+    // Remove leading slash.
+    foreach($excludedPaths as $excludedPath) {
+      $filteredExcludedPaths[] = preg_replace("/^\//", '', $excludedPath);
+    }
+    $this->excludedPaths = $filteredExcludedPaths;
     // Add "--exclude" option to all calls to CLI.
     $this->getAwsCli()->getGlobalOptions('s3')->empty();
     foreach ($this->excludedPaths as $excludedPath) {
@@ -241,7 +246,7 @@ class AwsS3IncrementalDeployer {
       }
     }
 
-    // Always finish copying metadata dir.
+    // Always finish copying checksum file.
     if (count($newFiles) !== 0 || count($updatedFiles) !== 0 || count($deletedFiles) !== 0) {
       $this->logger->info('Copying checksums file to S3 bucket...');
       $this->s3cp(

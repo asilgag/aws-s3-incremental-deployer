@@ -1,7 +1,7 @@
 {
   "name": "asilgag/aws-s3-incremental-deployer",
   "type": "library",
-  "description": "Incremental and atomic deployments for AWS S3",
+  "description": "Incremental and atomic high-performance deployments for AWS S3",
   "keywords": ["AWS" ,"S3", "CLI"],
   "homepage": "https://github.com/asilgag/aws-s3-incremental-deployer",
   "license": "MIT",

@@ -11,8 +11,7 @@ use RuntimeException;
  * Provides incremental deploys for AWS S3 buckets.
  */
 class AwsS3IncrementalDeployer {
-  protected const CHECKSUMS_DIR = '.metadata';
-  public const CHECKSUMS_FILENAME = 'checksums';
+  public const CHECKSUMS_BASE_FILENAME = '.checksums';
 
   /**
    * A logger implementing PSR-3 logger interface.
@@ -20,6 +19,13 @@ class AwsS3IncrementalDeployer {
    * @var \Psr\Log\LoggerInterface
    */
   protected $logger;
+
+  /**
+   * Array of paths that won't be uploaded.
+   *
+   * @var array
+   */
+  protected $excludedPaths;
 
   /**
    * Path to the site to be deployed.
@@ -88,6 +94,24 @@ class AwsS3IncrementalDeployer {
   }
 
   /**
+   * Set the paths that should be excluded and won't be uploaded to S3.
+   *
+   * @param array $excludedPaths
+   *   Array of paths that won't be uploaded. Paths MUST be relative to
+   *   $this->siteDir and MUST NOT start with a leading slash:
+   *   CORRECT: ['path/to/exclude/*']
+   *   INCORRECT: ['/path/to/exclude/*'].
+   */
+  public function setExcludedPaths(array $excludedPaths): void {
+    $this->excludedPaths = $excludedPaths;
+    // Add "--exclude" option to all calls to CLI.
+    $this->getAwsCli()->getGlobalOptions('s3')->empty();
+    foreach ($this->excludedPaths as $excludedPath) {
+      $this->getAwsCli()->getGlobalOptions('s3')->add('--exclude *' . $excludedPath);
+    }
+  }
+
+  /**
    * Deploys a site to a AWS S3 bucket.
    *
    * S3 doesn't support atomic deploys, so we need to execute a deploy in
@@ -105,6 +129,8 @@ class AwsS3IncrementalDeployer {
     $this->tempDir = sys_get_temp_dir() . '/aws-s3-incremental-deployer/' . $bucket;
 
     // Before anything else, empty temp directory.
+    $start = time();
+    $this->logger->info('DEPLOY STARTED');
     $this->emptyTempDir();
 
     // Create local site's checksums.
@@ -119,14 +145,15 @@ class AwsS3IncrementalDeployer {
     // Check if there is something already deployed on S3 so we can do an
     // incremental deploy.
     if ($deployedSiteChecksums) {
-      $this->logger->info('Deploy: INCREMENTAL');
+      $this->logger->info('Deploy strategy: INCREMENTAL');
       $this->deployIncremental($localSiteChecksums, $deployedSiteChecksums);
     }
     else {
-      $this->logger->info('Deploy: FULL');
+      $this->logger->info('Deploy strategy: FULL');
       $this->deployFull();
     }
 
+    $this->logger->info('Elapsed time: ' . (time() - $start) . ' seconds');
     $this->logger->info('DEPLOY DONE!');
   }
 
@@ -166,15 +193,15 @@ class AwsS3IncrementalDeployer {
     // this moment.
     if (count($newFiles) !== 0) {
       // Upload new files to S3. First, do assets, and then html files.
-      if (count($newFilesSplit['assets']) !== 0) {
+      if (isset($newFilesSplit['assets']) && count($newFilesSplit['assets']) !== 0) {
         $this->logger->debug('Copying new assets to S3 bucket...');
         $this->s3cp($newFilesTempDir . '/assets', $this->bucketRootUri, [], [], TRUE);
       }
-      if (count($newFilesSplit['pages']) !== 0) {
+      if (isset($newFilesSplit['pages']) && count($newFilesSplit['pages']) !== 0) {
         $this->logger->debug('Copying new pages to S3 bucket...');
         $this->s3cp($newFilesTempDir . '/pages', $this->bucketRootUri, [], [], TRUE);
       }
-      if (count($newFilesSplit['homepage']) !== 0) {
+      if (isset($newFilesSplit['homepage']) && count($newFilesSplit['homepage']) !== 0) {
         $this->logger->debug('Copying new homepage to S3 bucket...');
         $this->s3cp($newFilesTempDir . '/homepage', $this->bucketRootUri, [], [], TRUE);
       }
@@ -182,15 +209,15 @@ class AwsS3IncrementalDeployer {
 
     if (count($updatedFiles) !== 0) {
       // Upload updated files to S3. First, do assets, and then html files.
-      if (count($updatedFilesSplit['assets']) !== 0) {
+      if (isset($updatedFilesSplit['assets']) && count($updatedFilesSplit['assets']) !== 0) {
         $this->logger->debug('Copying updated assets to S3 bucket...');
         $this->s3cp($updatedFilesTempDir . '/assets', $this->bucketRootUri, [], [], TRUE);
       }
-      if (count($updatedFilesSplit['pages']) !== 0) {
+      if (isset($updatedFilesSplit['pages']) && count($updatedFilesSplit['pages']) !== 0) {
         $this->logger->debug('Copying updated pages to S3 bucket...');
         $this->s3cp($updatedFilesTempDir . '/pages', $this->bucketRootUri, [], [], TRUE);
       }
-      if (count($updatedFilesSplit['homepage']) !== 0) {
+      if (isset($updatedFilesSplit['homepage']) && count($updatedFilesSplit['homepage']) !== 0) {
         $this->logger->debug('Copying updated homepage to S3 bucket...');
         $this->s3cp($updatedFilesTempDir . '/homepage', $this->bucketRootUri, [], [], TRUE);
       }
@@ -199,13 +226,13 @@ class AwsS3IncrementalDeployer {
     if (count($deletedFiles) !== 0) {
       // Delete files from S3. First, do html files, and then assets.
       // NO homepage can be deleted.
-      if (count($deletedFilesSplit['pages']) !== 0) {
+      if (isset($deletedFilesSplit['pages']) && count($deletedFilesSplit['pages']) !== 0) {
         $this->logger->debug('Deleting pages from S3 bucket...');
         foreach ($deletedFilesSplit['pages'] as $page) {
           $this->s3rm(str_replace('/./', '/', $this->bucketRootUri . '/' . $page));
         }
       }
-      if (count($deletedFilesSplit['assets']) !== 0) {
+      if (isset($deletedFilesSplit['assets']) && count($deletedFilesSplit['assets']) !== 0) {
         $this->logger->debug('Deleting assets from S3 bucket...');
         foreach ($deletedFilesSplit['assets'] as $asset) {
           $this->s3rm(str_replace('/./', '/', $this->bucketRootUri . '/' . $asset));
@@ -215,15 +242,15 @@ class AwsS3IncrementalDeployer {
 
     // Always finish copying metadata dir.
     if (count($newFiles) !== 0 || count($updatedFiles) !== 0 || count($deletedFiles) !== 0) {
-      $this->logger->debug('Copying metadata dir to S3 bucket...');
+      $this->logger->info('Copying checksums file to S3 bucket...');
       $this->s3cp(
-        $this->siteDir . '/' . self::CHECKSUMS_DIR,
-        $this->bucketRootUri . '/' . self::CHECKSUMS_DIR,
+        $this->siteDir . '/' . $this->getChecksumRelativeFilePath(),
+        $this->bucketRootUri,
         [],
         [],
-        TRUE
+        FALSE
       );
-      $this->logger->debug('Setting private ACL to checksums file...');
+      $this->logger->info('Setting private ACL to checksums file...');
       $this->s3PutObjectAcl($this->getChecksumRelativeFilePath(), 'private');
     }
 
@@ -238,15 +265,15 @@ class AwsS3IncrementalDeployer {
   protected function deployFull(): void {
     // Upload all files to S3. First, do assets, and then finish syncing
     // everything while deleting stale files.
-    $this->logger->debug('Copying all assets to S3 bucket...');
+    $this->logger->info('Copying all assets to S3 bucket...');
     $this->s3cp($this->siteDir, $this->bucketRootUri, ['*.html'], [], TRUE);
-    $this->logger->debug('Copying all HTML files to S3 bucket...');
+    $this->logger->info('Copying all HTML files to S3 bucket...');
     $this->s3cp($this->siteDir, $this->bucketRootUri, ['*'], ['*.html'], TRUE);
     // In fact, this sync won't upload anything, since all files have been already uploaded.
     // We only use this sync to be able to clean stale files using the "delete" option.
-    $this->logger->debug('Syncing everything and deleting stale content from S3 bucket...');
+    $this->logger->info('Syncing everything and deleting stale content from S3 bucket...');
     $this->s3sync($this->siteDir, $this->bucketRootUri, [], [], TRUE);
-    $this->logger->debug('Setting private ACL to checksums file...');
+    $this->logger->info('Setting private ACL to checksums file...');
     $this->s3PutObjectAcl($this->getChecksumRelativeFilePath(), 'private');
   }
 
@@ -259,14 +286,14 @@ class AwsS3IncrementalDeployer {
    * @throws \RuntimeException
    */
   protected function getChecksumRelativeFilePath():string {
-    return self::CHECKSUMS_DIR . '/' . self::CHECKSUMS_FILENAME . '.' . md5($this->getS3BucketOwner()) . '.dat';
+    return self::CHECKSUMS_BASE_FILENAME . '.' . md5($this->getS3BucketOwner()) . '.dat';
   }
 
   /**
    * Clear temporary directory.
    */
   protected function emptyTempDir(): void {
-    $this->logger->debug('Emptying temporary directory ' . $this->tempDir);
+    $this->logger->info('Emptying temporary directory ' . $this->tempDir);
 
     if (!file_exists($this->tempDir)) {
       return;
@@ -296,18 +323,17 @@ class AwsS3IncrementalDeployer {
    */
   protected function createLocalSiteChecksums(): bool {
     $localChecksumsFilepath = $this->siteDir . '/' . $this->getChecksumRelativeFilePath();
-    $this->logger->debug("Creating checksums on $localChecksumsFilepath");
-
-    // Ensure that directory for local checksums is present.
-    if (!is_dir($this->siteDir . '/' . self::CHECKSUMS_DIR)) {
-      mkdir($this->siteDir . '/' . self::CHECKSUMS_DIR, 0777, TRUE);
-    }
+    $this->logger->info("Creating checksums on $localChecksumsFilepath");
 
     // Execute a shell command to be able to scale to sites with millions of
     // files.
+    $excludes = '';
+    foreach ($this->excludedPaths as $excludedPath) {
+      $excludes .= str_replace('//', '/', ' ! -path "./' . $excludedPath . '"');
+    }
     $commands = [
       'cd ' . $this->siteDir,
-      'find . -type f ! -path "./' . self::CHECKSUMS_DIR . '/*" -print0 | sort -z | xargs -0 sha1sum > ' . $localChecksumsFilepath,
+      'find . -type f ! -path "./' . $this->getChecksumRelativeFilePath() . '"' . $excludes . ' -print0 | sort -z | xargs -0 sha1sum > ' . $localChecksumsFilepath,
     ];
     $command = implode(' && ', $commands);
     $this->logger->debug("Executing: $command");
@@ -315,12 +341,11 @@ class AwsS3IncrementalDeployer {
     $timeStart = microtime(TRUE);
     exec($command, $output, $returnValue);
     $timeEnd = microtime(TRUE);
-    $this->logger->debug('Checksums generation took ' . number_format(round($timeEnd - $timeStart, 3), 3) . ' secs.');
+    $this->logger->info('Checksums generation took ' . number_format(round($timeEnd - $timeStart, 3), 3) . ' secs.');
 
     if ($returnValue !== 0) {
       throw new RuntimeException('Unable to create checksums for ' . $this->siteDir . " :\n" . implode("\n", $output));
     }
-    $this->logger->debug('Checksums file created: ' . $localChecksumsFilepath);
 
     return TRUE;
   }
@@ -353,7 +378,7 @@ class AwsS3IncrementalDeployer {
    * @throws \RuntimeException
    */
   protected function getDeployedSiteChecksums(): array {
-    $this->logger->debug('Getting last deployed release checksums...');
+    $this->logger->info('Getting last deployed checksums...');
     $objectUri = $this->bucketRootUri . '/' . $this->getChecksumRelativeFilePath();
     $lastDeployedChecksumsRaw = $this->getS3ObjectContents($objectUri);
     $this->logger->debug('Got ' . strlen($lastDeployedChecksumsRaw) . ' bytes');
@@ -456,15 +481,17 @@ class AwsS3IncrementalDeployer {
     if ($checksumRawData) {
       $checksumLines = explode("\n", $checksumRawData);
       foreach ($checksumLines as $line) {
-        [$hash, $filepath] = explode('  ', $line, 2);
-        $checksums[$filepath] = $hash;
+        $lineParts = explode('  ', $line, 2);
+        if (isset($lineParts[0], $lineParts[1])) {
+          $checksums[$lineParts[1]] = $lineParts[0];
+        }
       }
     }
     else {
       $this->logger->warning('No checksum data to be parsed...');
     }
 
-    $this->logger->debug('Found ' . count($checksums) . ' entries on checksum data.');
+    $this->logger->info('Found ' . count($checksums) . ' entries on checksum data.');
 
     return $checksums;
   }
@@ -573,10 +600,14 @@ class AwsS3IncrementalDeployer {
     }
 
     foreach ($splitFiles as $key => $subset) {
-      $this->logger->debug("\t * $key: " . count($subset) . ' files');
+      $subsetCount = is_array($subset) ? count($subset) : 0;
+      $this->logger->debug("\t * $key: " . $subsetCount . ' files');
     }
 
-    $totalCount = count($splitFiles['assets']) + count($splitFiles['pages']) + count($splitFiles['homepage']);
+    $assetsCount = is_array($splitFiles['assets']) ? count($splitFiles['assets']) : 0;
+    $pagesCount = is_array($splitFiles['pages']) ? count($splitFiles['pages']) : 0;
+    $homepageCount = is_array($splitFiles['homepage']) ? count($splitFiles['homepage']) : 0;
+    $totalCount = $assetsCount + $pagesCount + $homepageCount;
     if ($totalCount > 0 && $totalCount < 100) {
       $this->logger->debug(print_r($splitFiles, TRUE));
     }

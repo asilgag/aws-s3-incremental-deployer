@@ -12,6 +12,7 @@ use RuntimeException;
  */
 class AwsS3IncrementalDeployer {
   public const CHECKSUMS_BASE_FILENAME = '.checksums';
+  public const CHECKSUMS_EXTENSION = 'data';
 
   /**
    * A logger implementing PSR-3 logger interface.
@@ -286,7 +287,7 @@ class AwsS3IncrementalDeployer {
    * @throws \RuntimeException
    */
   protected function getChecksumRelativeFilePath():string {
-    return self::CHECKSUMS_BASE_FILENAME . '.' . md5($this->getS3BucketOwner()) . '.dat';
+    return self::CHECKSUMS_BASE_FILENAME . '.' . md5($this->getS3BucketOwner()) . '.' . self::CHECKSUMS_EXTENSION;
   }
 
   /**

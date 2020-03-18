@@ -106,7 +106,7 @@ class AwsS3IncrementalDeployer {
   public function setExcludedPaths(array $excludedPaths): void {
     $filteredExcludedPaths = [];
     // Remove leading slash.
-    foreach($excludedPaths as $excludedPath) {
+    foreach ($excludedPaths as $excludedPath) {
       $filteredExcludedPaths[] = preg_replace("/^\//", '', $excludedPath);
     }
     $this->excludedPaths = $filteredExcludedPaths;
@@ -702,8 +702,8 @@ class AwsS3IncrementalDeployer {
   protected function s3cp(string $from, string $to, array $excludes = [], array $includes = [], bool $isRecursive = FALSE): void {
     $options = $this->standardizeCommandOptions([
       'cp',
-      $from,
-      $to,
+      escapeshellarg($from),
+      escapeshellarg($to),
       '--exclude' => $excludes,
       '--include' => $includes,
       '--recursive' => $isRecursive,
@@ -725,7 +725,7 @@ class AwsS3IncrementalDeployer {
   protected function s3rm(string $s3Uri, bool $isRecursive = FALSE): void {
     $options = $this->standardizeCommandOptions([
       'rm',
-      $s3Uri,
+      escapeshellarg($s3Uri),
       '--recursive' => $isRecursive,
     ]);
 
@@ -752,8 +752,8 @@ class AwsS3IncrementalDeployer {
   protected function s3sync(string $from, string $to, array $excludes = [], array $includes = [], bool $delete = FALSE): void {
     $options = $this->standardizeCommandOptions([
       'sync',
-      $from,
-      $to,
+      escapeshellarg($from),
+      escapeshellarg($to),
       '--exclude' => $excludes,
       '--include' => $includes,
       '--delete' => $delete,
@@ -784,7 +784,7 @@ class AwsS3IncrementalDeployer {
       if (!is_int($key)) {
         if (is_array($value) && count($value) > 0) {
           foreach ($value as $innerValue) {
-            $standardizedOptions[] = $key . ' ' . $innerValue;
+            $standardizedOptions[] = $key . ' ' . escapeshellarg($innerValue);
           }
         }
         if (is_bool($value) && $value === TRUE) {

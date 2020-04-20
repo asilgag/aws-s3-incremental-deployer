@@ -185,6 +185,16 @@ class AwsS3IncrementalDeployer {
     $updatedFiles = $this->getUpdatedFiles($newChecksums, $oldChecksums, $newFiles, $deletedFiles);
     $updatedFilesSplit = $this->splitFiles($updatedFiles);
 
+    // Deleting files is a slow operation on AWS S3, since there is no way to
+    // delete multiple files at once. Hence, it must be done individually for
+    // each file. Doing it for hundreds of files will slow down the deployment,
+    // so if there are too much files to delete it is always better to execute
+    // a full deploy.
+    if (count($deletedFiles) > 200) {
+      $this->deployFull();
+      return;
+    }
+
     // Prepare files to be copied to S3.
     // We prepare files ahead of upload, to ensure all steps executed on S3 are
     // done without interruptions.

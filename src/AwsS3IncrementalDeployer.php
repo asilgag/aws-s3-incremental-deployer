@@ -286,8 +286,6 @@ class AwsS3IncrementalDeployer
                 [],
                 false
             );
-            $this->logger->info('Setting private ACL to checksums file...');
-            $this->s3PutObjectAcl($this->getChecksumRelativeFilePath(), 'private');
         }
 
     }
@@ -323,8 +321,6 @@ class AwsS3IncrementalDeployer
             [],
             !$alwaysIncremental
         );
-        $this->logger->info('Setting private ACL to checksums file...');
-        $this->s3PutObjectAcl($this->getChecksumRelativeFilePath(), 'private');
     }
 
     /**
@@ -443,28 +439,6 @@ class AwsS3IncrementalDeployer
         }
 
         return $lastDeployedChecksums;
-    }
-
-    /**
-     * Make a bucket key private.
-     *
-     * @param string $key
-     *   Key inside a bucket.
-     * @param string $acl
-     *   ACL name.
-     *
-     * @throws \RuntimeException
-     */
-    protected function s3PutObjectAcl(string $key, string $acl): void
-    {
-        $command = new CliCommand(
-            's3api put-object-acl', [
-            '--bucket ' . $this->bucket,
-            '--key ' . $key,
-            '--acl ' . $acl,
-            ]
-        );
-        $this->awsCli->exec($command);
     }
 
     /**

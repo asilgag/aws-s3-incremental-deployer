@@ -13,21 +13,21 @@ class MultiLogger extends AbstractLogger {
   /**
    * Absolute path to the file where log messages are stored.
    *
-   * @var string
+   * @var string|null
    */
-  protected $logFilePath;
+  protected ?string $logFilePath;
 
   /**
    * A flag to set if this logger must also log to stdout.
    *
    * @var bool
    */
-  protected $mustLogToStdout;
+  protected bool $mustLogToStdout;
 
   /**
    * FileLogger constructor.
    *
-   * @param string $logFilePath
+   * @param string|null $logFilePath
    *   Optional. Absolute path to the file where log messages are stored.
    *   Passing a NULL value disables logging in a file.
    * @param bool $mustLogToStdout
@@ -41,7 +41,7 @@ class MultiLogger extends AbstractLogger {
   /**
    * {@inheritdoc}
    */
-  public function log($level, $message, array $context = []) {
+  public function log($level, string|\Stringable $message, array $context = []): void {
     $date = new DateTime('NOW');
     $timestamp = $date->format('Y-m-d H:i:s.u');
     $formattedMessage = '[' . $timestamp . '] [' . $level . '] ' . $message;

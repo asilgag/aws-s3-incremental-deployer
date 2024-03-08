@@ -133,7 +133,7 @@ class AwsS3IncrementalDeployer
      *   Name of the bucket where the site will be deployed.
      * @param bool   $alwaysIncremental
      *   If true only the first time the strategy will be full
-     *   (with no --delete option), 
+     *   (with no --delete option),
      *   then always will be incremental.
      */
     public function deploy(
@@ -187,7 +187,7 @@ class AwsS3IncrementalDeployer
      *   Set of previous checksums.
      * @param bool  $alwaysIncremental
      *   If true only the first time the strategy will be full
-     *   (with no --delete option), 
+     *   (with no --delete option),
      *   then always will be incremental.
      *
      * @throws \RuntimeException
@@ -210,7 +210,7 @@ class AwsS3IncrementalDeployer
         // each file. Doing it for hundreds of files will slow down the deployment,
         // so if there are too much files to delete it is always better to execute
         // a full deploy.
-        if (count($deletedFiles) > 200 && !$alwaysIncremental) {
+        if (count($deletedFiles) > 200) {
             $this->deployFull($alwaysIncremental);
             return;
         }
@@ -295,10 +295,10 @@ class AwsS3IncrementalDeployer
      *
      * This should only happens when uploading data for the first time, or when
      * a release is already uploaded without checksum data.
-     * 
+     *
      * @param bool $alwaysIncremental
      *  If true only the first time the strategy will be full
-     *  (with no --delete option), 
+     *  (with no --delete option),
      *  then always will be incremental.
      */
     protected function deployFull(bool $alwaysIncremental): void
